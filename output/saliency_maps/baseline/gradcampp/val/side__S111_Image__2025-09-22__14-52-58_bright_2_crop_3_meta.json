@@ -1,0 +1,63 @@
+{
+  "image_path": "/kaggle/input/datasets/thanhmay2406/datasettop/merged_yolo_grouped/images/valid/side__S111_Image__2025-09-22__14-52-58_bright_2_crop_3.jpg",
+  "method": "gradcampp",
+  "target_layer": "C3k2",
+  "primary_prediction": {
+    "class_id": 5,
+    "class_name": "Tip_Wear",
+    "confidence": 0.8209590315818787,
+    "xyxy": [
+      209.6582794189453,
+      13.3975830078125,
+      265.43487548828125,
+      73.96826171875
+    ]
+  },
+  "target_score": 12.701092720031738,
+  "ground_truth": [
+    {
+      "class_id": 4,
+      "class_name": "Severe_Rust",
+      "xyxy": [
+        213.000032,
+        76.000064,
+        263.999904,
+        189.999936
+      ]
+    },
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "xyxy": [
+        210.999936,
+        19.000128,
+        265.000064,
+        74.000192
+      ]
+    }
+  ],
+  "predictions": [
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "confidence": 0.8209590315818787,
+      "xyxy": [
+        209.6582794189453,
+        13.3975830078125,
+        265.43487548828125,
+        73.96826171875
+      ]
+    },
+    {
+      "class_id": 4,
+      "class_name": "Severe_Rust",
+      "confidence": 0.7089927792549133,
+      "xyxy": [
+        213.6785888671875,
+        91.53279876708984,
+        263.5091552734375,
+        190.26266479492188
+      ]
+    }
+  ]
+}

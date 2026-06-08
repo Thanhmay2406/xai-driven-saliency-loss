@@ -1,0 +1,42 @@
+{
+  "image_path": "/kaggle/input/datasets/thanhmay2406/datasettop/merged_yolo_grouped/images/valid/side__S111_Image__2025-09-22__14-52-58_bright_2_crop_2.jpg",
+  "method": "gradcam",
+  "target_layer": "C3k2",
+  "primary_prediction": {
+    "class_id": 4,
+    "class_name": "Severe_Rust",
+    "confidence": 0.7859472036361694,
+    "xyxy": [
+      260.5510559082031,
+      65.99995422363281,
+      302.0025634765625,
+      166.33523559570312
+    ]
+  },
+  "target_score": 12.707836151123047,
+  "ground_truth": [
+    {
+      "class_id": 4,
+      "class_name": "Severe_Rust",
+      "xyxy": [
+        262.999968,
+        64.999872,
+        299.99984,
+        192.99974400000002
+      ]
+    }
+  ],
+  "predictions": [
+    {
+      "class_id": 4,
+      "class_name": "Severe_Rust",
+      "confidence": 0.7859472036361694,
+      "xyxy": [
+        260.5510559082031,
+        65.99995422363281,
+        302.0025634765625,
+        166.33523559570312
+      ]
+    }
+  ]
+}

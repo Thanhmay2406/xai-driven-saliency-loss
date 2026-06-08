@@ -1,0 +1,63 @@
+{
+  "image_path": "/kaggle/input/datasets/thanhmay2406/datasettop/merged_yolo_grouped/images/valid/side__S101_Image__2025-09-10__12-16-33_dark_2_crop_4_jpg.jpg",
+  "method": "gradcampp",
+  "target_layer": "C3k2",
+  "primary_prediction": {
+    "class_id": 1,
+    "class_name": "Broken",
+    "confidence": 0.7525531053543091,
+    "xyxy": [
+      162.7372589111328,
+      152.96853637695312,
+      292.92919921875,
+      203.86373901367188
+    ]
+  },
+  "target_score": 12.972583770751953,
+  "ground_truth": [
+    {
+      "class_id": 1,
+      "class_name": "Broken",
+      "xyxy": [
+        169.99987199999998,
+        150.00003199999998,
+        293.000064,
+        210.000224
+      ]
+    },
+    {
+      "class_id": 2,
+      "class_name": "Chipped",
+      "xyxy": [
+        156.000096,
+        293.000064,
+        175.00022400000003,
+        318.000256
+      ]
+    }
+  ],
+  "predictions": [
+    {
+      "class_id": 1,
+      "class_name": "Broken",
+      "confidence": 0.7525531053543091,
+      "xyxy": [
+        162.7372589111328,
+        152.96853637695312,
+        292.92919921875,
+        203.86373901367188
+      ]
+    },
+    {
+      "class_id": 2,
+      "class_name": "Chipped",
+      "confidence": 0.38106009364128113,
+      "xyxy": [
+        155.5564727783203,
+        289.8331604003906,
+        177.95452880859375,
+        324.8376770019531
+      ]
+    }
+  ]
+}

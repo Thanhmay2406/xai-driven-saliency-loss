@@ -1,0 +1,63 @@
+{
+  "image_path": "/kaggle/input/datasets/thanhmay2406/datasettop/merged_yolo_grouped/images/valid/side__S111_Image__2025-09-22__14-52-58_bright_2_crop_4.jpg",
+  "method": "eigencam",
+  "target_layer": "C3k2",
+  "primary_prediction": {
+    "class_id": 4,
+    "class_name": "Severe_Rust",
+    "confidence": 0.766855776309967,
+    "xyxy": [
+      169.34555053710938,
+      76.09947204589844,
+      219.8698272705078,
+      199.017333984375
+    ]
+  },
+  "target_score": null,
+  "ground_truth": [
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "xyxy": [
+        181.000064,
+        24.999968000000003,
+        248.00025600000004,
+        87.000032
+      ]
+    },
+    {
+      "class_id": 4,
+      "class_name": "Severe_Rust",
+      "xyxy": [
+        166.99984,
+        79.00009600000001,
+        213.99996800000002,
+        200.999904
+      ]
+    }
+  ],
+  "predictions": [
+    {
+      "class_id": 4,
+      "class_name": "Severe_Rust",
+      "confidence": 0.766855776309967,
+      "xyxy": [
+        169.34555053710938,
+        76.09947204589844,
+        219.8698272705078,
+        199.017333984375
+      ]
+    },
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "confidence": 0.7536076307296753,
+      "xyxy": [
+        180.01185607910156,
+        29.559555053710938,
+        247.1232452392578,
+        84.92626953125
+      ]
+    }
+  ]
+}

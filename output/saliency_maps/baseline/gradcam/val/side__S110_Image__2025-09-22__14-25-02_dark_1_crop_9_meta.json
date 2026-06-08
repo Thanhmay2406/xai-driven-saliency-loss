@@ -1,0 +1,63 @@
+{
+  "image_path": "/kaggle/input/datasets/thanhmay2406/datasettop/merged_yolo_grouped/images/valid/side__S110_Image__2025-09-22__14-25-02_dark_1_crop_9.jpg",
+  "method": "gradcam",
+  "target_layer": "C3k2",
+  "primary_prediction": {
+    "class_id": 5,
+    "class_name": "Tip_Wear",
+    "confidence": 0.8031792640686035,
+    "xyxy": [
+      216.98626708984375,
+      118.81826782226562,
+      282.6990966796875,
+      211.380859375
+    ]
+  },
+  "target_score": 12.819082260131836,
+  "ground_truth": [
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "xyxy": [
+        157.00003199999998,
+        71.99987200000001,
+        218.00016,
+        168.99993600000002
+      ]
+    },
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "xyxy": [
+        221.999904,
+        118.000064,
+        283.000032,
+        204.99987199999998
+      ]
+    }
+  ],
+  "predictions": [
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "confidence": 0.8031792640686035,
+      "xyxy": [
+        216.98626708984375,
+        118.81826782226562,
+        282.6990966796875,
+        211.380859375
+      ]
+    },
+    {
+      "class_id": 5,
+      "class_name": "Tip_Wear",
+      "confidence": 0.7015880942344666,
+      "xyxy": [
+        155.06317138671875,
+        77.65245056152344,
+        215.7543182373047,
+        168.21250915527344
+      ]
+    }
+  ]
+}
