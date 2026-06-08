@@ -271,6 +271,42 @@ def find_last_conv_layer(module: torch.nn.Module) -> torch.nn.Module:
     return conv_layers[-1]
 
 
+# Ham nay tim block feature truoc Detect de dung lam target layer cho CAM trong YOLO.
+def find_yolo_saliency_target_layer(module: torch.nn.Module, prefer_branch: str = "small") -> torch.nn.Module:
+    model_list = getattr(module, "model", None)
+    if model_list is None or not hasattr(model_list, "__len__"):
+        return find_last_conv_layer(module)
+
+    detect_module = None
+    detect_index = None
+    for idx, child in enumerate(model_list):
+        if child.__class__.__name__ == "Detect":
+            detect_module = child
+            detect_index = idx
+            break
+
+    if detect_module is None or detect_index is None:
+        return find_last_conv_layer(module)
+
+    feature_indices = getattr(detect_module, "f", None)
+    if isinstance(feature_indices, int):
+        feature_indices = [feature_indices]
+
+    if not feature_indices:
+        return model_list[max(0, detect_index - 1)]
+
+    if prefer_branch == "small":
+        target_index = feature_indices[0]
+    elif prefer_branch == "medium":
+        target_index = feature_indices[len(feature_indices) // 2]
+    elif prefer_branch == "large":
+        target_index = feature_indices[-1]
+    else:
+        target_index = feature_indices[0]
+
+    return model_list[target_index]
+
+
 # Ham nay ve bbox ground truth va prediction len anh de de doi chieu.
 def draw_boxes(
     image: Image.Image,
