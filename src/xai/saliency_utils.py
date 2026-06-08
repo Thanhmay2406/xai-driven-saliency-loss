@@ -160,8 +160,8 @@ def select_primary_prediction(predictions: list[dict[str, Any]]) -> dict[str, An
     return max(predictions, key=lambda item: item["confidence"])
 
 
-# Ham nay tim tensor du doan phu hop nhat trong output thap cua model YOLO.
-def find_primary_output_tensor(output: Any) -> torch.Tensor:
+# Ham nay thu thap de quy tat ca tensor nam trong output cua model.
+def collect_output_tensors(output: Any) -> list[torch.Tensor]:
     tensors: list[torch.Tensor] = []
 
     def _collect(node: Any) -> None:
@@ -177,26 +177,90 @@ def find_primary_output_tensor(output: Any) -> torch.Tensor:
                 _collect(item)
 
     _collect(output)
+    return tensors
+
+
+# Ham nay tim tensor du doan phu hop nhat trong output thap cua model YOLO.
+def find_primary_output_tensor(output: Any) -> torch.Tensor:
+    tensors = collect_output_tensors(output)
     if not tensors:
         raise ValueError("No tensor found in model output.")
-    return max(tensors, key=lambda tensor: tensor.numel())
+
+    tensors_with_grad = [tensor for tensor in tensors if tensor.requires_grad]
+    candidate_pool = tensors_with_grad or tensors
+
+    def _priority(tensor: torch.Tensor) -> tuple[int, int, int]:
+        supports_class_scores = 1 if _supports_class_dimension(tensor, num_classes=1) else 0
+        return (supports_class_scores, int(tensor.requires_grad), tensor.numel())
+
+    return max(candidate_pool, key=_priority)
+
+
+# Ham nay kiem tra tensor co dang phu hop de cat class score hay khong.
+def _supports_class_dimension(tensor: torch.Tensor, num_classes: int) -> bool:
+    if tensor.ndim == 3:
+        return tensor.shape[1] >= 4 + num_classes or tensor.shape[2] >= 4 + num_classes
+    if tensor.ndim == 4:
+        return tensor.shape[1] >= 4 + num_classes or tensor.shape[-1] >= 4 + num_classes
+    return False
+
+
+# Ham nay trich candidate target score tu mot tensor 3D/4D cua detector.
+def extract_class_score_candidates(tensor: torch.Tensor, class_id: int, num_classes: int) -> list[torch.Tensor]:
+    candidates: list[torch.Tensor] = []
+
+    if tensor.ndim == 3:
+        if tensor.shape[1] >= 4 + num_classes:
+            class_scores = tensor[:, 4 : 4 + num_classes, :]
+            candidates.append(class_scores[:, class_id, :].max())
+        if tensor.shape[2] >= 4 + num_classes:
+            class_scores = tensor[:, :, 4 : 4 + num_classes]
+            candidates.append(class_scores[:, :, class_id].max())
+        return candidates
+
+    if tensor.ndim == 4:
+        if tensor.shape[1] >= 4 + num_classes:
+            class_scores = tensor[:, 4 : 4 + num_classes, :, :]
+            candidates.append(class_scores[:, class_id, :, :].max())
+        if tensor.shape[-1] >= 4 + num_classes:
+            class_scores = tensor[:, :, :, 4 : 4 + num_classes]
+            candidates.append(class_scores[:, :, :, class_id].max())
+
+    return candidates
 
 
 # Ham nay trich scalar target cho mot class tu output tensor cua detector.
 def build_detection_target(output: Any, class_id: int, num_classes: int) -> torch.Tensor:
+    tensors = collect_output_tensors(output)
+    if not tensors:
+        raise ValueError("No tensor found in model output.")
+
+    grad_candidates: list[torch.Tensor] = []
+    fallback_candidates: list[torch.Tensor] = []
+
+    for tensor in tensors:
+        extracted = extract_class_score_candidates(tensor, class_id=class_id, num_classes=num_classes)
+        if not extracted:
+            continue
+        if tensor.requires_grad:
+            grad_candidates.extend(extracted)
+        else:
+            fallback_candidates.extend(extracted)
+
+    if grad_candidates:
+        return torch.stack([candidate.reshape(1) for candidate in grad_candidates]).max()
+    if fallback_candidates:
+        candidate = torch.stack([item.reshape(1) for item in fallback_candidates]).max()
+        raise RuntimeError(
+            "Found class-score tensors, but none require gradients. "
+            "This usually means the selected output branch was detached from autograd."
+        )
+
     tensor = find_primary_output_tensor(output)
-    if tensor.ndim != 3:
-        raise ValueError(f"Expected 3D detection tensor, got shape {tuple(tensor.shape)}")
-
-    if tensor.shape[1] >= 4 + num_classes:
-        class_scores = tensor[:, 4 : 4 + num_classes, :]
-        return class_scores[:, class_id, :].max()
-
-    if tensor.shape[2] >= 4 + num_classes:
-        class_scores = tensor[:, :, 4 : 4 + num_classes]
-        return class_scores[:, :, class_id].max()
-
-    raise ValueError(f"Could not infer class score layout from tensor shape {tuple(tensor.shape)}")
+    raise ValueError(
+        "Could not infer class score layout from model output. "
+        f"Selected tensor shape was {tuple(tensor.shape)}."
+    )
 
 
 # Ham nay tim layer conv cuoi cung de dat hook cho cac phuong phap CAM.

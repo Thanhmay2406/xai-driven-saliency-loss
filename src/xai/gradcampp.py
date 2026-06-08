@@ -38,7 +38,9 @@ class GradCAMPlusPlus:
     # Ham nay tinh saliency map Grad-CAM++ cho class duoc chon.
     def generate(self, image_tensor: torch.Tensor, class_id: int, num_classes: int) -> tuple[torch.Tensor, torch.Tensor]:
         self.model.zero_grad(set_to_none=True)
-        output = self.model(image_tensor)
+        image_tensor = image_tensor.requires_grad_(True)
+        with torch.enable_grad():
+            output = self.model(image_tensor)
         target_score = build_detection_target(output, class_id=class_id, num_classes=num_classes)
         target_score.backward(retain_graph=False)
 
