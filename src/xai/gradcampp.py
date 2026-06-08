@@ -35,7 +35,7 @@ class GradCAMPlusPlus:
     def generate(self, image_tensor: torch.Tensor, class_id: int, num_classes: int) -> tuple[torch.Tensor, torch.Tensor]:
         was_training = self.model.training
         self.model.zero_grad(set_to_none=True)
-        image_tensor = image_tensor.requires_grad_(True)
+        image_tensor = image_tensor.clone().detach().requires_grad_(True)
         with torch.enable_grad():
             self.model.train()
             set_batchnorm_eval(self.model)
