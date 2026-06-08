@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from .saliency_utils import build_detection_target, normalize_cam, upsample_cam
+from .saliency_utils import build_detection_target, normalize_cam, set_batchnorm_eval, upsample_cam
 
 
 @dataclass
@@ -37,12 +37,16 @@ class GradCAMPlusPlus:
 
     # Ham nay tinh saliency map Grad-CAM++ cho class duoc chon.
     def generate(self, image_tensor: torch.Tensor, class_id: int, num_classes: int) -> tuple[torch.Tensor, torch.Tensor]:
+        was_training = self.model.training
         self.model.zero_grad(set_to_none=True)
         image_tensor = image_tensor.requires_grad_(True)
         with torch.enable_grad():
+            self.model.train()
+            set_batchnorm_eval(self.model)
             output = self.model(image_tensor)
         target_score = build_detection_target(output, class_id=class_id, num_classes=num_classes)
         target_score.backward(retain_graph=False)
+        self.model.train(was_training)
 
         if self.state.activations is None or self.state.gradients is None:
             raise RuntimeError("Hooks did not capture activations/gradients for Grad-CAM++.")

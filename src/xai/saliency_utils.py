@@ -326,3 +326,10 @@ def label_path_from_image(image_path: Path, label_dir: Path) -> Path:
 # Ham nay resize activation map len kich thuoc dau vao bang noi suy bilinear.
 def upsample_cam(cam_tensor: torch.Tensor, target_size: tuple[int, int]) -> torch.Tensor:
     return F.interpolate(cam_tensor, size=target_size, mode="bilinear", align_corners=False)
+
+
+# Ham nay dua cac layer BatchNorm ve eval de tranh cap nhat running stats khi sinh CAM.
+def set_batchnorm_eval(module: torch.nn.Module) -> None:
+    for child in module.modules():
+        if isinstance(child, torch.nn.modules.batchnorm._BatchNorm):
+            child.eval()
