@@ -18,22 +18,18 @@ class GradCAM:
         self.target_layer = target_layer
         self.state = HookState()
         self.forward_handle = target_layer.register_forward_hook(self._save_activations)
-        self.backward_handle = target_layer.register_full_backward_hook(self._save_gradients)
 
     # Ham nay luu activation map tu target layer trong lan forward.
     def _save_activations(self, module: torch.nn.Module, inputs: tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
         del module, inputs
         self.state.activations = output
+        self.state.gradients = None
+        if output.requires_grad:
+            output.register_hook(self._store_tensor_gradient)
 
-    # Ham nay luu gradient cua target layer trong lan backward.
-    def _save_gradients(
-        self,
-        module: torch.nn.Module,
-        grad_input: tuple[torch.Tensor | None, ...],
-        grad_output: tuple[torch.Tensor | None, ...],
-    ) -> None:
-        del module, grad_input
-        self.state.gradients = grad_output[0]
+    # Ham nay luu gradient truc tiep tu activation tensor cua target layer.
+    def _store_tensor_gradient(self, gradient: torch.Tensor) -> None:
+        self.state.gradients = gradient
 
     # Ham nay tinh saliency map Grad-CAM cho class duoc chon.
     def generate(self, image_tensor: torch.Tensor, class_id: int, num_classes: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -66,4 +62,3 @@ class GradCAM:
     # Ham nay giai phong cac hook da dang ky.
     def close(self) -> None:
         self.forward_handle.remove()
-        self.backward_handle.remove()
