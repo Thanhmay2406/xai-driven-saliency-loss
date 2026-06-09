@@ -4,6 +4,7 @@ from typing import Any, Callable, Sequence
 import torch
 
 from src.losses import saliency_alignment_loss
+from src.xai.activation_attention import ActivationAttention
 from src.xai.eigencam import EigenCAM
 from src.xai.gradcam import GradCAM
 from src.xai.gradcampp import GradCAMPlusPlus
@@ -15,7 +16,7 @@ DetectionLossFn = Callable[[Any, Any], torch.Tensor]
 
 @dataclass
 class XAITrainerConfig:
-    xai_method: str = "gradcam"
+    xai_method: str = "activation"
     lambda_saliency: float = 0.1
     num_classes: int = 1
     target_layer: torch.nn.Module | None = None
@@ -56,8 +57,10 @@ class XAITrainer:
         self.xai = self._build_xai_method()
 
     # Ham nay tao bo sinh saliency theo cau hinh da chon.
-    def _build_xai_method(self) -> GradCAM | GradCAMPlusPlus | EigenCAM:
+    def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
+        if method_name in {"activation", "attention", "activation_attention"}:
+            return ActivationAttention(self.model, self.target_layer)
         if method_name == "gradcam":
             return GradCAM(self.model, self.target_layer)
         if method_name in {"gradcam++", "gradcampp"}:
@@ -175,6 +178,9 @@ class XAITrainer:
 
     # Ham nay sinh saliency map cho tung anh trong batch bang XAI method da chon.
     def compute_saliency_maps(self, images: torch.Tensor, targets: Any) -> torch.Tensor:
+        if isinstance(self.xai, ActivationAttention):
+            return self.xai.generate_from_activations(target_size=tuple(images.shape[-2:]))
+
         saliency_maps = []
         batch_targets = targets if isinstance(targets, Sequence) else [None] * images.shape[0]
 
@@ -201,6 +207,11 @@ class XAITrainer:
 
         predictions = self.model(images)
         detection_loss = self.detection_loss_fn(predictions, targets)
+        if not isinstance(self.xai, ActivationAttention):
+            raise ValueError(
+                "Differentiable saliency training requires `xai_method='activation'`. "
+                "Use Grad-CAM, Grad-CAM++, or EigenCAM for offline visualization/evaluation only."
+            )
 
         saliency_maps = self.compute_saliency_maps(images, targets)
         gt_masks = self.build_gt_masks(targets, image_hw=tuple(images.shape[-2:]), device=images.device)
@@ -216,8 +227,8 @@ class XAITrainer:
             detection_loss=detection_loss.detach(),
             saliency_loss=saliency_loss.detach(),
             lambda_saliency=lambda_saliency,
-            saliency_maps=saliency_maps,
-            gt_masks=gt_masks,
+            saliency_maps=saliency_maps.detach(),
+            gt_masks=gt_masks.detach(),
             predictions=predictions,
         )
 

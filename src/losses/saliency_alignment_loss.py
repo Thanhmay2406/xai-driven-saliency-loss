@@ -34,6 +34,7 @@ def saliency_alignment_loss(
     *,
     eps: float = 1e-8,
     reduction: str = "mean",
+    sample_weights: torch.Tensor | None = None,
 ) -> torch.Tensor:
     saliency_maps = _ensure_nchw(saliency_maps, name="saliency_maps")
     gt_masks = _ensure_nchw(gt_masks, name="gt_masks")
@@ -52,10 +53,21 @@ def saliency_alignment_loss(
     total_energy = saliency_maps.sum(dim=(1, 2, 3)) + eps
     losses = 1.0 - (inside_energy / total_energy)
 
+    if sample_weights is not None:
+        sample_weights = torch.as_tensor(sample_weights, dtype=losses.dtype, device=losses.device).reshape(-1)
+        if sample_weights.shape[0] != losses.shape[0]:
+            raise ValueError(
+                "sample_weights must have the same batch size as saliency_maps. "
+                f"Got {sample_weights.shape[0]} and {losses.shape[0]}."
+            )
+        losses = losses * sample_weights
+
     if reduction == "none":
         return losses
     if reduction == "sum":
         return losses.sum()
     if reduction == "mean":
-        return losses.mean()
+        if sample_weights is None:
+            return losses.mean()
+        return losses.sum() / sample_weights.sum().clamp_min(eps)
     raise ValueError(f"Unsupported reduction: {reduction}")

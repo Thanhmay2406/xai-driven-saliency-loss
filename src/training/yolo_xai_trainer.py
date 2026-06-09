@@ -6,6 +6,7 @@ from typing import Any
 import torch
 
 from src.losses import saliency_alignment_loss
+from src.xai.activation_attention import ActivationAttention
 from src.xai.eigencam import EigenCAM
 from src.xai.gradcam import GradCAM
 from src.xai.gradcampp import GradCAMPlusPlus
@@ -14,7 +15,7 @@ from src.xai.saliency_utils import find_yolo_saliency_target_layer
 
 @dataclass
 class UltralyticsYOLOXAITrainerConfig:
-    xai_method: str = "gradcam"
+    xai_method: str = "activation"
     lambda_saliency: float = 0.1
     num_classes: int = 1
     target_layer: torch.nn.Module | None = None
@@ -53,8 +54,10 @@ class UltralyticsYOLOXAITrainer:
         self.xai = self._build_xai_method()
 
     # Ham nay tao XAI method dua tren cau hinh.
-    def _build_xai_method(self) -> GradCAM | GradCAMPlusPlus | EigenCAM:
+    def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
+        if method_name in {"activation", "attention", "activation_attention"}:
+            return ActivationAttention(self.model, self.target_layer)
         if method_name == "gradcam":
             return GradCAM(self.model, self.target_layer)
         if method_name in {"gradcam++", "gradcampp"}:
@@ -173,6 +176,9 @@ class UltralyticsYOLOXAITrainer:
     # Ham nay sinh saliency map tung anh theo dung model YOLO dang huan luyen.
     def compute_saliency_maps(self, batch: dict[str, Any]) -> torch.Tensor:
         images = batch["img"]
+        if isinstance(self.xai, ActivationAttention):
+            return self.xai.generate_from_activations(target_size=tuple(images.shape[-2:]))
+
         class_ids = self.infer_class_ids(batch)
         saliency_maps = []
 
@@ -198,6 +204,12 @@ class UltralyticsYOLOXAITrainer:
         self.optimizer.zero_grad(set_to_none=True)
 
         detection_loss, loss_items, raw_detection_output = self.compute_detection_loss(batch)
+        if not isinstance(self.xai, ActivationAttention):
+            raise ValueError(
+                "Differentiable saliency training requires `xai_method='activation'`. "
+                "Use Grad-CAM, Grad-CAM++, or EigenCAM for offline visualization/evaluation only."
+            )
+
         saliency_maps = self.compute_saliency_maps(batch)
         gt_masks = self.build_gt_masks(batch)
         saliency_loss = saliency_alignment_loss(saliency_maps, gt_masks)
@@ -212,8 +224,8 @@ class UltralyticsYOLOXAITrainer:
             detection_loss=detection_loss.detach(),
             saliency_loss=saliency_loss.detach(),
             lambda_saliency=lambda_saliency,
-            saliency_maps=saliency_maps,
-            gt_masks=gt_masks,
+            saliency_maps=saliency_maps.detach(),
+            gt_masks=gt_masks.detach(),
             loss_items=loss_items,
             raw_detection_output=raw_detection_output,
         )
