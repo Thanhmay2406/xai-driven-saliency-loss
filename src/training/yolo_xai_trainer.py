@@ -62,6 +62,23 @@ class UltralyticsYOLOXAITrainer:
         if model_device != device:
             self.model.to(device)
 
+    # Dam bao cac tham so cua model khong bi frozen ngoai y muon sau khi load checkpoint/val.
+    def _ensure_trainable_model(self) -> None:
+        for parameter in self.model.parameters():
+            if not parameter.requires_grad:
+                parameter.requires_grad_(True)
+
+    # Bao loi ro rang neu mot tensor quan trong da roi khoi computational graph.
+    def _ensure_grad_path(self, name: str, tensor: torch.Tensor) -> None:
+        if tensor.requires_grad:
+            return
+        raise RuntimeError(
+            f"`{name}` does not require grad. "
+            "The model is likely running under a no-grad/inference context or was loaded with frozen parameters. "
+            "Ensure training uses `xai_method='activation'`, the model is unfrozen, and the step runs under "
+            "`torch.enable_grad()`."
+        )
+
     # Ham nay tao XAI method dua tren cau hinh.
     def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
@@ -209,28 +226,37 @@ class UltralyticsYOLOXAITrainer:
 
     # Ham nay thuc hien mot training step theo batch format baseline YOLO.
     def training_step(self, batch: dict[str, Any], *, epoch: int | None = None) -> UltralyticsYOLOXAIStepOutput:
-        self.model.train()
         images = batch["img"]
         if not isinstance(images, torch.Tensor):
             raise ValueError("Expected `batch['img']` to be a torch.Tensor before training_step.")
         self._ensure_model_device(images.device)
-        self.optimizer.zero_grad(set_to_none=True)
+        self._ensure_trainable_model()
 
-        detection_loss, loss_items, raw_detection_output = self.compute_detection_loss(batch)
-        if not isinstance(self.xai, ActivationAttention):
-            raise ValueError(
-                "Differentiable saliency training requires `xai_method='activation'`. "
-                "Use Grad-CAM, Grad-CAM++, or EigenCAM for offline visualization/evaluation only."
-            )
+        with torch.enable_grad():
+            self.model.train()
+            self.optimizer.zero_grad(set_to_none=True)
 
-        saliency_maps = self.compute_saliency_maps(batch)
-        gt_masks = self.build_gt_masks(batch)
-        saliency_loss = saliency_alignment_loss(saliency_maps, gt_masks)
+            detection_loss, loss_items, raw_detection_output = self.compute_detection_loss(batch)
+            if not isinstance(self.xai, ActivationAttention):
+                raise ValueError(
+                    "Differentiable saliency training requires `xai_method='activation'`. "
+                    "Use Grad-CAM, Grad-CAM++, or EigenCAM for offline visualization/evaluation only."
+                )
 
-        lambda_saliency = self.get_lambda_saliency(epoch)
-        total_loss = detection_loss + (lambda_saliency * saliency_loss)
-        total_loss.backward()
-        self.optimizer.step()
+            saliency_maps = self.compute_saliency_maps(batch)
+            gt_masks = self.build_gt_masks(batch)
+            saliency_loss = saliency_alignment_loss(saliency_maps, gt_masks)
+
+            lambda_saliency = self.get_lambda_saliency(epoch)
+            total_loss = detection_loss + (lambda_saliency * saliency_loss)
+
+            self._ensure_grad_path("detection_loss", detection_loss)
+            self._ensure_grad_path("saliency_maps", saliency_maps)
+            self._ensure_grad_path("saliency_loss", saliency_loss)
+            self._ensure_grad_path("total_loss", total_loss)
+
+            total_loss.backward()
+            self.optimizer.step()
 
         return UltralyticsYOLOXAIStepOutput(
             total_loss=total_loss.detach(),

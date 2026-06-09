@@ -65,6 +65,21 @@ class XAITrainer:
         if model_device != device:
             self.model.to(device)
 
+    # Khoi phuc training cho model neu checkpoint hoac pipeline truoc do da freeze tham so.
+    def _ensure_trainable_model(self) -> None:
+        for parameter in self.model.parameters():
+            if not parameter.requires_grad:
+                parameter.requires_grad_(True)
+
+    # Bao loi som neu graph autograd bi mat.
+    def _ensure_grad_path(self, name: str, tensor: torch.Tensor) -> None:
+        if tensor.requires_grad:
+            return
+        raise RuntimeError(
+            f"`{name}` does not require grad. "
+            "The model is likely running under a no-grad/inference context or was loaded with frozen parameters."
+        )
+
     # Ham nay tao bo sinh saliency theo cau hinh da chon.
     def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
@@ -211,26 +226,35 @@ class XAITrainer:
 
     # Ham nay thuc hien mot training step day du theo so do XAI-guided training.
     def training_step(self, images: torch.Tensor, targets: Any, *, epoch: int | None = None) -> XAITrainerStepOutput:
-        self.model.train()
         self._ensure_model_device(images.device)
-        self.optimizer.zero_grad(set_to_none=True)
+        self._ensure_trainable_model()
 
-        predictions = self.model(images)
-        detection_loss = self.detection_loss_fn(predictions, targets)
-        if not isinstance(self.xai, ActivationAttention):
-            raise ValueError(
-                "Differentiable saliency training requires `xai_method='activation'`. "
-                "Use Grad-CAM, Grad-CAM++, or EigenCAM for offline visualization/evaluation only."
-            )
+        with torch.enable_grad():
+            self.model.train()
+            self.optimizer.zero_grad(set_to_none=True)
 
-        saliency_maps = self.compute_saliency_maps(images, targets)
-        gt_masks = self.build_gt_masks(targets, image_hw=tuple(images.shape[-2:]), device=images.device)
-        saliency_loss = saliency_alignment_loss(saliency_maps, gt_masks)
+            predictions = self.model(images)
+            detection_loss = self.detection_loss_fn(predictions, targets)
+            if not isinstance(self.xai, ActivationAttention):
+                raise ValueError(
+                    "Differentiable saliency training requires `xai_method='activation'`. "
+                    "Use Grad-CAM, Grad-CAM++, or EigenCAM for offline visualization/evaluation only."
+                )
 
-        lambda_saliency = self.get_lambda_saliency(epoch)
-        total_loss = detection_loss + (lambda_saliency * saliency_loss)
-        total_loss.backward()
-        self.optimizer.step()
+            saliency_maps = self.compute_saliency_maps(images, targets)
+            gt_masks = self.build_gt_masks(targets, image_hw=tuple(images.shape[-2:]), device=images.device)
+            saliency_loss = saliency_alignment_loss(saliency_maps, gt_masks)
+
+            lambda_saliency = self.get_lambda_saliency(epoch)
+            total_loss = detection_loss + (lambda_saliency * saliency_loss)
+
+            self._ensure_grad_path("detection_loss", detection_loss)
+            self._ensure_grad_path("saliency_maps", saliency_maps)
+            self._ensure_grad_path("saliency_loss", saliency_loss)
+            self._ensure_grad_path("total_loss", total_loss)
+
+            total_loss.backward()
+            self.optimizer.step()
 
         return XAITrainerStepOutput(
             total_loss=total_loss.detach(),
