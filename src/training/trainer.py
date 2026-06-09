@@ -80,6 +80,15 @@ class XAITrainer:
             "The model is likely running under a no-grad/inference context or was loaded with frozen parameters."
         )
 
+    # Chuan hoa loss ve scalar de backward hoat dong on dinh.
+    def _reduce_loss_tensor(self, name: str, loss: torch.Tensor) -> torch.Tensor:
+        if loss.ndim == 0 or loss.numel() == 1:
+            return loss.reshape(())
+        reduced = loss.sum()
+        if reduced.ndim != 0:
+            raise RuntimeError(f"`{name}` could not be reduced to a scalar loss. Got shape {tuple(loss.shape)}.")
+        return reduced
+
     # Ham nay tao bo sinh saliency theo cau hinh da chon.
     def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
@@ -234,7 +243,7 @@ class XAITrainer:
             self.optimizer.zero_grad(set_to_none=True)
 
             predictions = self.model(images)
-            detection_loss = self.detection_loss_fn(predictions, targets)
+            detection_loss = self._reduce_loss_tensor("detection_loss", self.detection_loss_fn(predictions, targets))
             if not isinstance(self.xai, ActivationAttention):
                 raise ValueError(
                     "Differentiable saliency training requires `xai_method='activation'`. "

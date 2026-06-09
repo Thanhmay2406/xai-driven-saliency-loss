@@ -79,6 +79,17 @@ class UltralyticsYOLOXAITrainer:
             "`torch.enable_grad()`."
         )
 
+    # Chuan hoa loss ve scalar de backward on dinh qua cac phien ban Ultralytics.
+    def _reduce_loss_tensor(self, name: str, loss: torch.Tensor) -> torch.Tensor:
+        if loss.ndim == 0 or loss.numel() == 1:
+            return loss.reshape(())
+        if not loss.requires_grad and loss.ndim > 0:
+            return loss.sum()
+        reduced = loss.sum()
+        if reduced.ndim != 0:
+            raise RuntimeError(f"`{name}` could not be reduced to a scalar loss. Got shape {tuple(loss.shape)}.")
+        return reduced
+
     # Ham nay tao XAI method dua tren cau hinh.
     def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
@@ -107,21 +118,23 @@ class UltralyticsYOLOXAITrainer:
         raw_output = self.model(batch)
 
         if isinstance(raw_output, torch.Tensor):
-            return raw_output, None, raw_output
+            loss = self._reduce_loss_tensor("detection_loss", raw_output)
+            loss_items = raw_output.detach() if raw_output.ndim > 0 else None
+            return loss, loss_items, raw_output
 
         if isinstance(raw_output, dict) and "loss" in raw_output:
             loss = raw_output["loss"]
             loss_items = raw_output.get("loss_items")
             if not isinstance(loss, torch.Tensor):
                 raise TypeError("Expected `loss` in model output to be a torch.Tensor.")
-            return loss, loss_items, raw_output
+            return self._reduce_loss_tensor("detection_loss", loss), loss_items, raw_output
 
         if isinstance(raw_output, (tuple, list)) and raw_output:
             loss = raw_output[0]
             loss_items = raw_output[1] if len(raw_output) > 1 else None
             if not isinstance(loss, torch.Tensor):
                 raise TypeError("Expected first item of model output to be a torch.Tensor loss.")
-            return loss, loss_items, raw_output
+            return self._reduce_loss_tensor("detection_loss", loss), loss_items, raw_output
 
         raise TypeError(
             "Unsupported YOLO training output. Expected tensor, dict with `loss`, or tuple/list `(loss, loss_items)`."
