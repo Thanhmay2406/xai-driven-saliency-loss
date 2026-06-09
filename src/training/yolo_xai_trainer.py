@@ -53,6 +53,15 @@ class UltralyticsYOLOXAITrainer:
         )
         self.xai = self._build_xai_method()
 
+    # Ham nay dam bao model nam cung device voi anh trong batch truoc khi forward.
+    def _ensure_model_device(self, device: torch.device) -> None:
+        try:
+            model_device = next(self.model.parameters()).device
+        except StopIteration:
+            return
+        if model_device != device:
+            self.model.to(device)
+
     # Ham nay tao XAI method dua tren cau hinh.
     def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
@@ -201,6 +210,10 @@ class UltralyticsYOLOXAITrainer:
     # Ham nay thuc hien mot training step theo batch format baseline YOLO.
     def training_step(self, batch: dict[str, Any], *, epoch: int | None = None) -> UltralyticsYOLOXAIStepOutput:
         self.model.train()
+        images = batch["img"]
+        if not isinstance(images, torch.Tensor):
+            raise ValueError("Expected `batch['img']` to be a torch.Tensor before training_step.")
+        self._ensure_model_device(images.device)
         self.optimizer.zero_grad(set_to_none=True)
 
         detection_loss, loss_items, raw_detection_output = self.compute_detection_loss(batch)

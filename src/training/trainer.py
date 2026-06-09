@@ -56,6 +56,15 @@ class XAITrainer:
         )
         self.xai = self._build_xai_method()
 
+    # Ham nay dam bao model nam cung device voi batch dau vao truoc khi forward.
+    def _ensure_model_device(self, device: torch.device) -> None:
+        try:
+            model_device = next(self.model.parameters()).device
+        except StopIteration:
+            return
+        if model_device != device:
+            self.model.to(device)
+
     # Ham nay tao bo sinh saliency theo cau hinh da chon.
     def _build_xai_method(self) -> ActivationAttention | GradCAM | GradCAMPlusPlus | EigenCAM:
         method_name = self.config.xai_method.strip().lower()
@@ -203,6 +212,7 @@ class XAITrainer:
     # Ham nay thuc hien mot training step day du theo so do XAI-guided training.
     def training_step(self, images: torch.Tensor, targets: Any, *, epoch: int | None = None) -> XAITrainerStepOutput:
         self.model.train()
+        self._ensure_model_device(images.device)
         self.optimizer.zero_grad(set_to_none=True)
 
         predictions = self.model(images)
