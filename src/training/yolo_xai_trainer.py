@@ -22,6 +22,9 @@ class UltralyticsYOLOXAITrainerConfig:
     prefer_branch: str = "small"
     use_progressive_lambda: bool = False
     progressive_warmup_epochs: int = 20
+    gt_mask_mode: str = "hard"
+    soft_mask_sigma: float = 0.35
+    shrunk_box_ratio: float = 0.7
 
 
 @dataclass
@@ -178,18 +181,61 @@ class UltralyticsYOLOXAITrainer:
         else:
             raise ValueError(f"Unsupported bbox_format: {box_format}")
 
+        mask_mode = self.config.gt_mask_mode.strip().lower()
         for sample_index, box in zip(batch_idx.tolist(), boxes_xyxy, strict=True):
             if sample_index < 0 or sample_index >= batch_size:
                 continue
+            if mask_mode == "shrunk":
+                box = self._shrink_box(box, ratio=self.config.shrunk_box_ratio)
+
             x1 = int(torch.round(box[0]).clamp(0, width).item())
             y1 = int(torch.round(box[1]).clamp(0, height).item())
             x2 = int(torch.round(box[2]).clamp(0, width).item())
             y2 = int(torch.round(box[3]).clamp(0, height).item())
             if x2 <= x1 or y2 <= y1:
                 continue
-            masks[sample_index, :, y1:y2, x1:x2] = 1.0
+
+            if mask_mode == "soft":
+                soft_region = self._build_soft_box_mask(
+                    height=y2 - y1,
+                    width=x2 - x1,
+                    device=device,
+                    sigma=max(float(self.config.soft_mask_sigma), 1e-3),
+                )
+                masks[sample_index, :, y1:y2, x1:x2] = torch.maximum(
+                    masks[sample_index, :, y1:y2, x1:x2],
+                    soft_region,
+                )
+            else:
+                masks[sample_index, :, y1:y2, x1:x2] = 1.0
 
         return masks
+
+    # Ham nay thu nho bbox ve gan tam defect de giam anh huong cua background.
+    def _shrink_box(self, box: torch.Tensor, ratio: float) -> torch.Tensor:
+        ratio = min(max(float(ratio), 1e-3), 1.0)
+        x1, y1, x2, y2 = box.unbind()
+        center_x = (x1 + x2) / 2.0
+        center_y = (y1 + y2) / 2.0
+        half_w = (x2 - x1) * ratio / 2.0
+        half_h = (y2 - y1) * ratio / 2.0
+        return torch.stack(
+            [
+                center_x - half_w,
+                center_y - half_h,
+                center_x + half_w,
+                center_y + half_h,
+            ]
+        )
+
+    # Ham nay tao soft mask co gia tri cao o tam bbox va giam dan ra bien.
+    def _build_soft_box_mask(self, *, height: int, width: int, device: torch.device, sigma: float) -> torch.Tensor:
+        y_coords = torch.linspace(-1.0, 1.0, steps=height, device=device, dtype=torch.float32)
+        x_coords = torch.linspace(-1.0, 1.0, steps=width, device=device, dtype=torch.float32)
+        yy, xx = torch.meshgrid(y_coords, x_coords, indexing="ij")
+        gaussian = torch.exp(-0.5 * ((xx / sigma) ** 2 + (yy / sigma) ** 2))
+        gaussian = gaussian / gaussian.max().clamp_min(1e-8)
+        return gaussian.unsqueeze(0)
 
     # Ham nay suy ra class target cho tung anh tu `cls` va `batch_idx`.
     def infer_class_ids(self, batch: dict[str, Any]) -> list[int]:
