@@ -25,7 +25,14 @@ def _normalize_saliency_map(saliency_maps: torch.Tensor, eps: float) -> torch.Te
 def _resize_mask(gt_masks: torch.Tensor, target_hw: tuple[int, int]) -> torch.Tensor:
     if gt_masks.shape[-2:] == target_hw:
         return gt_masks.float()
-    return F.interpolate(gt_masks.float(), size=target_hw, mode="nearest")
+    return F.interpolate(gt_masks.float(), size=target_hw, mode="bilinear", align_corners=False)
+
+
+def _normalize_gt_mask(gt_masks: torch.Tensor, eps: float) -> torch.Tensor:
+    gt_masks = torch.clamp(gt_masks.float(), min=0.0)
+    flat = gt_masks.flatten(start_dim=1)
+    max_vals = flat.max(dim=1, keepdim=True).values.view(-1, 1, 1, 1)
+    return gt_masks / max_vals.clamp_min(eps)
 
 
 def saliency_alignment_loss(
@@ -43,11 +50,11 @@ def saliency_alignment_loss(
         raise ValueError(
             "saliency_maps and gt_masks must have the same batch size. "
             f"Got {saliency_maps.shape[0]} and {gt_masks.shape[0]}."
-        )
+    )
 
     saliency_maps = _normalize_saliency_map(saliency_maps, eps=eps)
     gt_masks = _resize_mask(gt_masks, target_hw=saliency_maps.shape[-2:])
-    gt_masks = (gt_masks > 0).to(dtype=saliency_maps.dtype)
+    gt_masks = _normalize_gt_mask(gt_masks, eps=eps).to(dtype=saliency_maps.dtype)
 
     inside_energy = (saliency_maps * gt_masks).sum(dim=(1, 2, 3))
     total_energy = saliency_maps.sum(dim=(1, 2, 3)) + eps

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from src.losses.saliency_alignment_loss import _ensure_nchw, _normalize_saliency_map, _resize_mask
+from src.losses.saliency_alignment_loss import _ensure_nchw, _normalize_gt_mask, _normalize_saliency_map, _resize_mask
 
 
 def _prepare_saliency_and_masks(
@@ -21,7 +21,7 @@ def _prepare_saliency_and_masks(
 
     saliency_maps = _normalize_saliency_map(saliency_maps, eps=eps)
     gt_masks = _resize_mask(gt_masks, target_hw=saliency_maps.shape[-2:])
-    gt_masks = (gt_masks > 0).to(dtype=saliency_maps.dtype)
+    gt_masks = _normalize_gt_mask(gt_masks, eps=eps).to(dtype=saliency_maps.dtype)
     return saliency_maps, gt_masks
 
 
@@ -50,6 +50,6 @@ def saliency_iou(
 ) -> torch.Tensor:
     saliency_maps, gt_masks = _prepare_saliency_and_masks(saliency_maps, gt_masks, eps=eps)
     saliency_mask = (saliency_maps >= threshold).to(dtype=gt_masks.dtype)
-    intersection = (saliency_mask * gt_masks).sum(dim=(1, 2, 3))
-    union = ((saliency_mask + gt_masks) > 0).to(dtype=gt_masks.dtype).sum(dim=(1, 2, 3))
+    intersection = torch.minimum(saliency_mask, gt_masks).sum(dim=(1, 2, 3))
+    union = torch.maximum(saliency_mask, gt_masks).sum(dim=(1, 2, 3))
     return intersection / (union + eps)
