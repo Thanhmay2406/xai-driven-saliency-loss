@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
@@ -286,6 +287,16 @@ class XAIDetectionModel(DetectionModel):
     def init_criterion(self) -> UltralyticsYOLOXAILoss:
         return UltralyticsYOLOXAILoss(self, deepcopy(self.xai_config))
 
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        state["criterion"] = None
+        xai_config = state.get("xai_config")
+        if xai_config is not None:
+            xai_config = deepcopy(xai_config)
+            xai_config.target_layer = None
+            state["xai_config"] = xai_config
+        return state
+
 
 class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
     def __init__(
@@ -341,6 +352,34 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
             criterion = getattr(candidate, "criterion", None)
             if hasattr(criterion, "close"):
                 criterion.close()
+
+    @contextmanager
+    def _checkpoint_safe_models(self):
+        snapshots: list[tuple[torch.nn.Module, Any, Any]] = []
+        for candidate in (unwrap_model(self.model), getattr(self.ema, "ema", None)):
+            if candidate is None:
+                continue
+            criterion = getattr(candidate, "criterion", None)
+            xai_config = getattr(candidate, "xai_config", None)
+            target_layer = getattr(xai_config, "target_layer", None) if xai_config is not None else None
+            if hasattr(criterion, "close"):
+                criterion.close()
+            candidate.criterion = None
+            if xai_config is not None:
+                xai_config.target_layer = None
+            snapshots.append((candidate, criterion, target_layer))
+        try:
+            yield
+        finally:
+            for candidate, criterion, target_layer in snapshots:
+                candidate.criterion = criterion
+                xai_config = getattr(candidate, "xai_config", None)
+                if xai_config is not None:
+                    xai_config.target_layer = target_layer
+
+    def save_model(self):
+        with self._checkpoint_safe_models():
+            return super().save_model()
 
     def _on_pretrain_routine_end(self, trainer: "UltralyticsYOLOXAIDetectionTrainer") -> None:
         del trainer
