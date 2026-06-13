@@ -245,6 +245,7 @@ class UltralyticsYOLOXAILoss:
     def __call__(self, preds: Any, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         detection_total, detection_items = self.detection_criterion(preds, batch)
         if not torch.is_grad_enabled() or self.xai is None:
+            self.latest_batch_metrics = {}
             zero_saliency_loss = detection_total.new_zeros(())
             loss_items = torch.cat([detection_items, zero_saliency_loss.reshape(1)])
             return detection_total, loss_items
@@ -355,7 +356,7 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
 
     @contextmanager
     def _checkpoint_safe_models(self):
-        snapshots: list[tuple[torch.nn.Module, Any, Any]] = []
+        snapshots: list[tuple[torch.nn.Module, Any, Any, list[tuple[torch.nn.Module, Any, Any, Any]]]] = []
         for candidate in (unwrap_model(self.model), getattr(self.ema, "ema", None)):
             if candidate is None:
                 continue
@@ -364,18 +365,50 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
             target_layer = getattr(xai_config, "target_layer", None) if xai_config is not None else None
             if hasattr(criterion, "close"):
                 criterion.close()
+
+            module_hooks: list[tuple[torch.nn.Module, Any, Any, Any]] = []
+            for module in candidate.modules():
+                forward_hooks = getattr(module, "_forward_hooks", None)
+                forward_pre_hooks = getattr(module, "_forward_pre_hooks", None)
+                backward_hooks = getattr(module, "_backward_hooks", None)
+                module_hooks.append(
+                    (
+                        module,
+                        deepcopy(forward_hooks) if forward_hooks is not None else None,
+                        deepcopy(forward_pre_hooks) if forward_pre_hooks is not None else None,
+                        deepcopy(backward_hooks) if backward_hooks is not None else None,
+                    )
+                )
+                if forward_hooks is not None:
+                    forward_hooks.clear()
+                if forward_pre_hooks is not None:
+                    forward_pre_hooks.clear()
+                if backward_hooks is not None:
+                    backward_hooks.clear()
+
             candidate.criterion = None
             if xai_config is not None:
                 xai_config.target_layer = None
-            snapshots.append((candidate, criterion, target_layer))
+            snapshots.append((candidate, criterion, target_layer, module_hooks))
         try:
             yield
         finally:
-            for candidate, criterion, target_layer in snapshots:
+            for candidate, criterion, target_layer, module_hooks in snapshots:
                 candidate.criterion = criterion
                 xai_config = getattr(candidate, "xai_config", None)
                 if xai_config is not None:
                     xai_config.target_layer = target_layer
+                for module, forward_hooks, forward_pre_hooks, backward_hooks in module_hooks:
+                    if forward_hooks is not None:
+                        module._forward_hooks = forward_hooks
+                    if forward_pre_hooks is not None:
+                        module._forward_pre_hooks = forward_pre_hooks
+                    if backward_hooks is not None:
+                        module._backward_hooks = backward_hooks
+                if criterion is not None and getattr(criterion, "xai", None) is None and target_layer is not None:
+                    criterion.target_layer = target_layer
+                    criterion.xai = ActivationAttention(candidate, target_layer)
+                    criterion.latest_batch_metrics = {}
 
     def save_model(self):
         with self._checkpoint_safe_models():
@@ -407,6 +440,8 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
         criterion = getattr(unwrap_model(self.model), "criterion", None)
         if hasattr(criterion, "set_epoch"):
             criterion.set_epoch(self.epoch)
+        if hasattr(criterion, "latest_batch_metrics"):
+            criterion.latest_batch_metrics = {}
 
     def _on_train_batch_end(self, trainer: "UltralyticsYOLOXAIDetectionTrainer") -> None:
         del trainer
@@ -434,7 +469,7 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
         if self.args.val:
             _ensure_metric_keys(val_metrics, required_keys=EXPECTED_METRIC_KEYS, context="validation")
         det_loss = sum(float(train_losses.get(f"train/{name}", 0.0)) for name in ("box_loss", "cls_loss", "dfl_loss"))
-        sal_loss = float(train_losses.get("train/sal_loss", 0.0))
+        sal_loss = float(xai_means.get("saliency_loss", 0.0))
 
         epoch_record = {
             "epoch": self.epoch + 1,
