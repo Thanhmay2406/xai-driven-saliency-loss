@@ -354,6 +354,29 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
             if hasattr(criterion, "close"):
                 criterion.close()
 
+    def _ensure_xai_ready(self, candidate: torch.nn.Module | None) -> None:
+        if candidate is None:
+            return
+        criterion = getattr(candidate, "criterion", None)
+        if criterion is None or getattr(criterion, "xai", None) is not None:
+            return
+
+        target_layer = getattr(criterion, "target_layer", None)
+        if target_layer is None:
+            xai_config = getattr(candidate, "xai_config", None)
+            if xai_config is not None and getattr(xai_config, "target_layer", None) is not None:
+                target_layer = xai_config.target_layer
+            else:
+                prefer_branch = getattr(xai_config, "prefer_branch", "small") if xai_config is not None else "small"
+                target_layer = find_yolo_saliency_target_layer(candidate, prefer_branch=prefer_branch)
+
+        criterion.target_layer = target_layer
+        criterion.xai = ActivationAttention(candidate, target_layer)
+        criterion.latest_batch_metrics = {}
+        xai_config = getattr(candidate, "xai_config", None)
+        if xai_config is not None:
+            xai_config.target_layer = target_layer
+
     @contextmanager
     def _checkpoint_safe_models(self):
         snapshots: list[tuple[torch.nn.Module, Any, Any, list[tuple[torch.nn.Module, Any, Any, Any]]]] = []
@@ -362,7 +385,9 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
                 continue
             criterion = getattr(candidate, "criterion", None)
             xai_config = getattr(candidate, "xai_config", None)
-            target_layer = getattr(xai_config, "target_layer", None) if xai_config is not None else None
+            target_layer = getattr(criterion, "target_layer", None)
+            if target_layer is None and xai_config is not None:
+                target_layer = getattr(xai_config, "target_layer", None)
             if hasattr(criterion, "close"):
                 criterion.close()
 
@@ -405,10 +430,7 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
                         module._forward_pre_hooks = forward_pre_hooks
                     if backward_hooks is not None:
                         module._backward_hooks = backward_hooks
-                if criterion is not None and getattr(criterion, "xai", None) is None and target_layer is not None:
-                    criterion.target_layer = target_layer
-                    criterion.xai = ActivationAttention(candidate, target_layer)
-                    criterion.latest_batch_metrics = {}
+                self._ensure_xai_ready(candidate)
 
     def save_model(self):
         with self._checkpoint_safe_models():
@@ -437,7 +459,9 @@ class UltralyticsYOLOXAIDetectionTrainer(DetectionTrainer):
     def _on_train_epoch_start(self, trainer: "UltralyticsYOLOXAIDetectionTrainer") -> None:
         del trainer
         self._xai_epoch_batches = []
-        criterion = getattr(unwrap_model(self.model), "criterion", None)
+        model = unwrap_model(self.model)
+        self._ensure_xai_ready(model)
+        criterion = getattr(model, "criterion", None)
         if hasattr(criterion, "set_epoch"):
             criterion.set_epoch(self.epoch)
         if hasattr(criterion, "latest_batch_metrics"):
