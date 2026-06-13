@@ -1,0 +1,3 @@
+run,epochs_completed,best_epoch,best_precision,best_recall,best_map50,best_map50_95,final_map50_95,total_time_hours
+Baseline,46,36,0.70414,0.69676,0.73144,0.38789,0.38554,1.06381
+XAI-guided,57,47,0.73692,0.7217,0.75887,0.39847,0.38516,1.79244

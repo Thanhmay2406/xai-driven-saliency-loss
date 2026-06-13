@@ -1,0 +1,35 @@
+{
+  "epoch": 21,
+  "train": {
+    "epoch": 21,
+    "lr": 0.0067,
+    "lambda_saliency": 0.004,
+    "train_detection_loss": 4.7769200000000005,
+    "train_saliency_loss": 0.9880725077937818,
+    "train_total_loss": 4.7808722900311755,
+    "train_energy_in_box": 0.011927493748785784,
+    "train_pointing_game": 0.04437267125270141,
+    "train_saliency_iou": 0.01503389570634903,
+    "val_precision": 0.70183,
+    "val_recall": 0.6087,
+    "val_map50": 0.67381,
+    "val_map50_95": 0.34268,
+    "val_fitness": 0.34268,
+    "epoch_seconds": 113.06397914886475
+  },
+  "val": {
+    "metrics/precision(B)": 0.70183,
+    "metrics/recall(B)": 0.6087,
+    "metrics/mAP50(B)": 0.67381,
+    "metrics/mAP50-95(B)": 0.34268,
+    "val/box_loss": 1.68841,
+    "val/cls_loss": 1.5209,
+    "val/dfl_loss": 1.60798,
+    "val/sal_loss": 0.0
+  },
+  "lr": {
+    "lr/pg0": 0.0067,
+    "lr/pg1": 0.0067,
+    "lr/pg2": 0.0067
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "best_epoch": 47,
+  "best_epoch_by_fitness": 47,
+  "best_epoch_by_map50_95": 47,
+  "best_val_map50_95": 0.39771055366772784,
+  "num_epochs_completed": 58,
+  "best_checkpoint": "/kaggle/working/yolo_xai_from_scratch/xai_from_scratch_v2_fixed/weights/best.pt",
+  "last_checkpoint": "/kaggle/working/yolo_xai_from_scratch/xai_from_scratch_v2_fixed/weights/last.pt",
+  "history_csv": "/kaggle/working/yolo_xai_from_scratch/xai_from_scratch_v2_fixed/weights/train_history.csv",
+  "history_json": "/kaggle/working/yolo_xai_from_scratch/xai_from_scratch_v2_fixed/weights/train_history.json",
+  "best_val_metrics": {
+    "precision": 0.7380272225698289,
+    "recall": 0.7210019138444344,
+    "map50": 0.7579263796138647,
+    "map50_95": 0.39771055366772784,
+    "fitness": 0.39771055366772784,
+    "per_class_map50_95": {
+      "drill": 0.39771055366772784,
+      "Broken": 0.6219760535472634,
+      "Chipped": 0.3195285698639806,
+      "Scratched": 0.3248396561007081,
+      "Severe_Rust": 0.31664857441700556,
+      "Tip_Wear": 0.40555991440968153
+    },
+    "save_dir": "/kaggle/working/runs/detect/val-3",
+    "speed": {
+      "preprocess": 0.8811890686225418,
+      "inference": 3.8126370024956495,
+      "loss": 0.0016177960051453053,
+      "postprocess": 1.2683659057989294
+    }
+  },
+  "best_test_metrics": {
+    "precision": 0.7687716588534572,
+    "recall": 0.6549297947710302,
+    "map50": 0.7301281486637617,
+    "map50_95": 0.38065103082176255,
+    "fitness": 0.38065103082176255,
+    "per_class_map50_95": {
+      "drill": 0.38065103082176255,
+      "Broken": 0.6180370646284237,
+      "Chipped": 0.33427490599560195,
+      "Scratched": 0.2721982955699902,
+      "Severe_Rust": 0.2890682023841587,
+      "Tip_Wear": 0.3896766855306383
+    },
+    "save_dir": "/kaggle/working/runs/detect/val-4",
+    "speed": {
+      "preprocess": 0.9151946049963215,
+      "inference": 3.7686567087082428,
+      "loss": 0.0006455345739290835,
+      "postprocess": 0.9948245326456499
+    }
+  }
+}
